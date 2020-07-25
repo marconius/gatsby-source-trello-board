@@ -1,43 +1,43 @@
-const axios = require("axios");
+const axios = require('axios');
 
-const slugify = require("slugify");
+const slugify = require('slugify');
 
 exports.getTrelloCards = async ({
   key,
   token,
-  board_id
+  board_id: boardId,
 }) => {
-  const getData = params => axios.get(`https://api.trello.com/1/${params}&key=${key}&token=${token}`);
+  const getData = (params) => axios.get(`https://api.trello.com/1/${params}&key=${key}&token=${token}`);
 
   const results = [];
 
   try {
     const {
-      data: lists
-    } = await getData(`boards/${board_id}/lists?lists=all&fields=id,name`);
+      data: lists,
+    } = await getData(`boards/${boardId}/lists?lists=all&fields=id,name`);
     await Promise.all(lists.map(async (list, i) => {
       const {
-        data: cards
+        data: cards,
       } = await getData(`list/${list.id}/cards?fields=id,name`);
       await Promise.all(cards.map(async (card, e) => {
         const {
-          data
+          data,
         } = await getData(
-          `cards/${card.id}?fields=id,name,desc,due,url&checklists=all&checklist_fields=name,id&attachments=true&attachment_fields=id,url,name,pos`
+          `cards/${card.id}?fields=id,name,desc,due,url&checklists=all&checklist_fields=name,id&attachments=true&attachment_fields=id,url,name,pos`,
         );
         const medias = [];
 
         if (data.attachments.length) {
-          data.attachments.forEach(a => {
+          data.attachments.forEach((a) => {
             medias.push({
               id: a.id,
               name: a.name,
               url: a.url,
               pos: a.pos,
-              slug: slugify(a.name.split(".").shift(), {
-                replacement: "_",
-                lower: true
-              })
+              slug: slugify(a.name.split('.').shift(), {
+                replacement: '_',
+                lower: true,
+              }),
             });
           });
         }
@@ -46,15 +46,15 @@ exports.getTrelloCards = async ({
           list_index: i,
           list_id: list.id,
           list_slug: slugify(list.name, {
-            replacement: "_",
-            lower: true
+            replacement: '_',
+            lower: true,
           }),
           list_name: list.name,
           index: e,
           id: data.id,
           slug: slugify(data.name, {
-            replacement: "_",
-            lower: true
+            replacement: '_',
+            lower: true,
           }),
           name: data.name,
           content: data.desc,
@@ -65,8 +65,9 @@ exports.getTrelloCards = async ({
         });
       }));
     }));
-    return results;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.log(`ERROR while fetching cards : ${error}`);
   }
+  return results;
 };

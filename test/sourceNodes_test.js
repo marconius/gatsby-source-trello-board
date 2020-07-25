@@ -9,24 +9,24 @@ const {
 } = require('../src/sourceNodes');
 const fetch = require('../src/fetch');
 
-describe('Graphql', function() {
+describe('Graphql', () => {
   const checkItem1 = {
-    id: "59ae06dc4c215c8cf94cd47a",
-    idChecklist: "59ae06d39f754ff22ca604ee",
-    name: "Water Melon",
+    id: '59ae06dc4c215c8cf94cd47a',
+    idChecklist: '59ae06d39f754ff22ca604ee',
+    name: 'Water Melon',
   };
   const checkItem2 = {
-    id: "59ae06e0bce19711997f7354",
-    idChecklist: "59ae06d39f754ff22ca604ee",
-    name: "Cantaloupe",
+    id: '59ae06e0bce19711997f7354',
+    idChecklist: '59ae06d39f754ff22ca604ee',
+    name: 'Cantaloupe',
   };
   const checklist = {
     checkItems: [
       checkItem1,
       checkItem2,
     ],
-    id: "59ae06d39f754ff22ca604ee",
-    name: "Fruits Grown in Quebec",
+    id: '59ae06d39f754ff22ca604ee',
+    name: 'Fruits Grown in Quebec',
   };
   const mockCards = [
     {
@@ -43,7 +43,7 @@ describe('Graphql', function() {
       due: '2020-04-29T01:55:00.000Z',
       url: 'https://trello.com/c/LMEy1myI/47-fruits',
       checklists: [checklist],
-    }
+    },
   ];
 
   let createContentDigest;
@@ -77,11 +77,11 @@ describe('Graphql', function() {
     const expectedChecklistNode = toCheckListNode(checklist, createContentDigest);
     const expectedChecklistItemNode1 = toCheckListItemNode(
       checkItem1,
-      createContentDigest
+      createContentDigest,
     );
     const expectedChecklistItemNode2 = toCheckListItemNode(
       checkItem2,
-      createContentDigest
+      createContentDigest,
     );
     deepEqual(createNodeCalls[0].firstArg, expectedCardNode);
     deepEqual(createNodeCalls[1].firstArg, expectedChecklistNode);
@@ -90,44 +90,44 @@ describe('Graphql', function() {
     equal(createNodeCalls.length, 4);
     deepEqual(
       createParentChildLink.getCalls()[0].firstArg,
-      { parent: expectedCardNode, child: expectedChecklistNode }
+      { parent: expectedCardNode, child: expectedChecklistNode },
     );
     deepEqual(
       createParentChildLink.getCalls()[1].firstArg,
-      { parent: expectedChecklistNode, child: expectedChecklistItemNode1 }
+      { parent: expectedChecklistNode, child: expectedChecklistItemNode1 },
     );
     deepEqual(
       createParentChildLink.getCalls()[2].firstArg,
-      { parent: expectedChecklistNode, child: expectedChecklistItemNode2 }
+      { parent: expectedChecklistNode, child: expectedChecklistItemNode2 },
     );
-    equal(createParentChildLink.getCalls().length, 3)
+    equal(createParentChildLink.getCalls().length, 3);
   });
 
-  describe('trelloCard node properties', function() {
-    it('includes properties', function() {
+  describe('trelloCard node properties', () => {
+    it('includes properties', () => {
       const cardNode = toCardNode(mockCards[0], () => {});
 
       deepEqual(cardNode.due, new Date(mockCards[0].due));
     });
-    it('handles null date', function() {
+    it('handles null date', () => {
       const cardNode = toCardNode({ ...mockCards[0], due: null }, () => {});
 
       equal(cardNode.due, null);
     });
   });
 
-  describe('checklist', function() {
+  describe('checklist', () => {
     it('includes properties', () => {
-      const checklistNode = toCheckListNode(checklist, createContentDigest)
+      const checklistNode = toCheckListNode(checklist, createContentDigest);
 
-      equal(checklistNode.id, checklist.id)
-      equal(checklistNode.name, checklist.name)
+      equal(checklistNode.id, checklist.id);
+      equal(checklistNode.name, checklist.name);
     });
 
     it('is type TrelloChecklist', () => {
-      const checklistNode = toCheckListNode(checklist, createContentDigest)
+      const checklistNode = toCheckListNode(checklist, createContentDigest);
 
-      equal(checklistNode.internal.type, 'TrelloBoardChecklist')
+      equal(checklistNode.internal.type, 'TrelloBoardChecklist');
     });
 
     it('uses fetched object as digest', () => {
@@ -140,27 +140,26 @@ describe('Graphql', function() {
     });
   });
 
-  describe('checklistItems', function() {
+  describe('checklistItems', () => {
     it('includes properties', () => {
-      checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
+      const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
       equal(checklistItemNode.id, checkItem2.id);
       equal(checklistItemNode.name, checkItem2.name);
     });
 
     it('is type TrelloBoardChecklistItem', () => {
-      checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
+      const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
       equal(checklistItemNode.internal.type, 'TrelloBoardChecklistItem');
     });
 
     it('uses fetched object as digest', () => {
       createContentDigest.returns('test123');
-      checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
+      const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
       deepEqual(createContentDigest.lastCall.firstArg, checkItem2);
       equal(checklistItemNode.internal.contentDigest, 'test123');
     });
-
   });
 });
