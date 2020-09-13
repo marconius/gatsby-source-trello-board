@@ -1,107 +1,98 @@
-const { deepEqual, equal } = require('assert');
-const faker = require('faker');
+const { strictEqual, deepStrictEqual } = require('assert');
 const nock = require('nock');
+const slugify = require('slugify');
 
 const { getTrelloCards } = require('../src/fetch');
 
+const trelloBoardCardsFixture = require('./trello_board_fixture.json');
+
+const { cards, checklists, lists } = trelloBoardCardsFixture;
+
 const fakeConfig = { key: 'key', token: 'token', board_id: '1234556' };
-const fakeDueDate = faker.date.future().toISOString();
-const fakeUrl = faker.internet.url();
 
-function mockTrelloResponses() {
-  const scope = nock('https://api.trello.com');
-
-  scope.get(`/1/boards/${fakeConfig.board_id}/lists`)
-    .query(true)
-    .reply(200, [
-      {
-        id: '59a342987202eb8c13ee6cb2',
-        name: 'Main Course',
-      },
-      {
-        id: '5bbd6f16ec4e618a3dedd825',
-        name: 'Deserts',
-      },
-    ]);
-
-  scope.get('/1/list/5bbd6f16ec4e618a3dedd825/cards')
-    .query(true)
-    .reply(200, [
-      {
-        id: '586353f89d7be8c1d43c8340',
-        name: 'Vegan Pancakes / crèpes (crepes)',
-      },
-      {
-        id: '58d7067d1d60ebd072c43bc6',
-        name: 'Banana Bread',
-      },
-    ]);
-
-  scope.get('/1/list/59a342987202eb8c13ee6cb2/cards')
-    .query(true)
-    .reply(200, [
-      {
-        id: '5bd6336f4ba8c62e479ccca8',
-        name: 'Mushroom Risotto',
-      },
-      {
-        id: '5c8ecc20c4336c616b57410d',
-        name: 'Sloppy Joes',
-      },
-    ]);
-
-  const pathWithIdCapturing = /\/1\/cards\/(\w+)/;
-  scope.get(pathWithIdCapturing)
-    .query((queryObject) => {
-      equal(queryObject.fields, 'id,name,desc,due,url');
-      equal(queryObject.checklists, 'all');
-      equal(queryObject.checklist_fields, 'name,id');
-      return true;
-    })
-    .reply(200, (uri) => {
-      const cardId = uri.match(pathWithIdCapturing)[1];
-      return {
-        attachments: [],
-        desc: `Description of ${cardId}`,
-        id: cardId,
-        name: `Name of ${cardId}`,
-        due: fakeDueDate,
-        url: fakeUrl,
-        checklists: [{
-          checkItems: [
-            { id: '123123', name: '1 pound of dates' },
-            { id: '646464', name: '4 large yams' },
-          ],
-          id: '59ae06d39f754ff22ca604ee',
-          name: 'Fruits Grown in Quebec',
-        }],
-      };
-    });
-
-  scope.persist();
-  return scope;
+function mockTrelloResponse() {
+  nock('https://api.trello.com')
+    .get(`/1/boards/${fakeConfig.board_id}`)
+    .query((actualQuery) => (
+      actualQuery.fields === 'desc,id,name,url'
+      && actualQuery.cards === 'visible'
+      && actualQuery.card_fields === 'id,idChecklists,idList,name,desc,due,url'
+      && actualQuery.card_attachments === 'true'
+      && actualQuery.card_attachments_fields === 'id,url,name,pos'
+      && actualQuery.checklists === 'all'
+      && actualQuery.checklist_fields === 'all'
+      && actualQuery.lists === 'open'
+      && actualQuery.list_fields === 'id,name,pos'
+      && actualQuery.key === fakeConfig.key
+      && actualQuery.token === fakeConfig.token
+    ))
+    .reply(200, trelloBoardCardsFixture);
 }
 
 describe('Data fetched from Trello', () => {
   beforeEach(() => {
-    mockTrelloResponses();
+    mockTrelloResponse();
   });
 
   it('includes all the cards from the board', async () => {
     const results = await getTrelloCards(fakeConfig);
 
-    equal(results.length, 4);
+    strictEqual(results.length, cards.length);
   });
 
   describe('Each Card', () => {
-    it('includes properties', async () => {
+    const slugifyName = (name) => slugify(name, {
+      replacement: '_',
+      lower: true,
+    });
+
+    it('includes the card properties', async () => {
       const results = await getTrelloCards(fakeConfig);
 
-      results.forEach((result) => {
-        deepEqual(result.due, fakeDueDate);
-        equal(result.url, fakeUrl);
-        equal(result.checklists.length, 1);
+      results.forEach((result, index) => {
+        const card = cards[index];
+
+        strictEqual(result.content, card.desc);
+        strictEqual(result.due, card.due);
+        strictEqual(result.id, card.id);
+        strictEqual(result.index, index);
+        strictEqual(result.name, card.name);
+        strictEqual(result.slug, slugifyName(card.name));
+        strictEqual(result.url, card.url);
       });
     });
+
+    it('includes each card`s list properties', async () => {
+      const results = await getTrelloCards(fakeConfig);
+
+      results.forEach((result, index) => {
+        const card = cards[index];
+
+        strictEqual(result.list_id, card.idList);
+        const listIndex = lists.findIndex((l) => l.id === card.idList);
+        const list = lists[listIndex];
+        strictEqual(result.list_index, listIndex);
+        strictEqual(result.list_name, list.name);
+        strictEqual(result.list_slug, slugifyName(list.name));
+      });
+    });
+
+    it('includes checklists for each card', async () => {
+      const results = await getTrelloCards(fakeConfig);
+
+      results.forEach((result, index) => {
+        const cardChecklistIds = cards[index].idChecklists;
+        const cardChecklists = cardChecklistIds.map((id) => checklists.find((c) => id === c.id));
+
+        strictEqual(result.checklists.length, cardChecklists.length);
+        result.checklists.forEach((resChecklist) => {
+          const checklist = cardChecklists.find((c) => resChecklist.id === c.id);
+          strictEqual(resChecklist.id, checklist.id);
+          strictEqual(resChecklist.idCard, checklist.idCard);
+          deepStrictEqual(resChecklist.checkItems, checklist.checkItems);
+        });
+      });
+    });
+    it('parses attachments for consumption as files', () => {});
   });
 });
