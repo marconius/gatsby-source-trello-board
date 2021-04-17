@@ -1,4 +1,4 @@
-const { equal, deepEqual } = require('assert');
+const { strictEqual, deepStrictEqual } = require('assert');
 const sinon = require('sinon');
 
 const {
@@ -49,7 +49,7 @@ describe('Graphql', () => {
   let createContentDigest;
 
   beforeEach(() => {
-    createContentDigest = sinon.stub().returns({});
+    createContentDigest = sinon.stub().returns({ hi: 'there' });
   });
 
   afterEach(() => {
@@ -57,22 +57,38 @@ describe('Graphql', () => {
   });
 
   it('creates nodes and sets the hierarchy', async () => {
-    sinon.stub(fetch, 'getTrelloCards').resolves(mockCards);
     const logStub = sinon.spy(console, 'log');
     const createNode = sinon.stub();
     const createParentChildLink = sinon.stub();
-
     const sourceNodesParams = {
       actions: { createNode, createParentChildLink },
       store: {},
       cache: {},
       createContentDigest,
     };
+    const board = {
+      id: '28173234a87f10e7dd343234',
+      name: 'Recipes',
+      desc: 'A Cool Recipe Board',
+      url: 'https://trello.com/b/AFakeIDhere/recipes',
+    };
+    sinon.stub(fetch, 'getTrelloCards').resolves({
+      board,
+      cardsWithAttachmentsAndChecklists: mockCards,
+    });
 
     await sourceNodes(sourceNodesParams);
 
-    equal(logStub.callCount, 2, 'should not have an error message');
+    strictEqual(logStub.callCount, 2, 'should not have an error message');
     const createNodeCalls = createNode.getCalls();
+    // first creates a board node, then a card node for each card, then one for each cheklist of a
+    // card, then one for each item of those checklists
+    const allChecklists = mockCards.reduce((cls, card) => cls.concat(card.checklists), []);
+    const allItems = allChecklists.reduce((clis, chklst) => clis.concat(chklst.checkItems), []);
+    strictEqual(
+      createNodeCalls.length,
+      1 + mockCards.length + allChecklists.length + allItems.length,
+    );
     const expectedCardNode = toCardNode(mockCards[0], createContentDigest);
     const expectedChecklistNode = toCheckListNode(checklist, createContentDigest);
     const expectedChecklistItemNode1 = toCheckListItemNode(
@@ -83,36 +99,48 @@ describe('Graphql', () => {
       checkItem2,
       createContentDigest,
     );
-    deepEqual(createNodeCalls[0].firstArg, expectedCardNode);
-    deepEqual(createNodeCalls[1].firstArg, expectedChecklistNode);
-    deepEqual(createNodeCalls[2].firstArg, expectedChecklistItemNode1);
-    deepEqual(createNodeCalls[3].firstArg, expectedChecklistItemNode2);
-    equal(createNodeCalls.length, 4);
-    deepEqual(
+    const expectedBoardNode = {
+      ...board,
+      internal: {
+        type: 'TrelloBoard',
+        contentDigest: createContentDigest(board),
+        mediaType: 'text/markdown',
+      },
+    };
+    deepStrictEqual(createNodeCalls[0].firstArg, expectedBoardNode);
+    deepStrictEqual(createNodeCalls[1].firstArg, expectedCardNode);
+    deepStrictEqual(createNodeCalls[2].firstArg, expectedChecklistNode);
+    deepStrictEqual(createNodeCalls[3].firstArg, expectedChecklistItemNode1);
+    deepStrictEqual(createNodeCalls[4].firstArg, expectedChecklistItemNode2);
+    deepStrictEqual(
       createParentChildLink.getCalls()[0].firstArg,
+      { parent: expectedBoardNode, child: expectedCardNode },
+    );
+    deepStrictEqual(
+      createParentChildLink.getCalls()[1].firstArg,
       { parent: expectedCardNode, child: expectedChecklistNode },
     );
-    deepEqual(
-      createParentChildLink.getCalls()[1].firstArg,
+    deepStrictEqual(
+      createParentChildLink.getCalls()[2].firstArg,
       { parent: expectedChecklistNode, child: expectedChecklistItemNode1 },
     );
-    deepEqual(
-      createParentChildLink.getCalls()[2].firstArg,
+    deepStrictEqual(
+      createParentChildLink.getCalls()[3].firstArg,
       { parent: expectedChecklistNode, child: expectedChecklistItemNode2 },
     );
-    equal(createParentChildLink.getCalls().length, 3);
+    strictEqual(createParentChildLink.getCalls().length, 4);
   });
 
   describe('trelloCard node properties', () => {
     it('includes properties', () => {
       const cardNode = toCardNode(mockCards[0], () => {});
 
-      deepEqual(cardNode.due, new Date(mockCards[0].due));
+      deepStrictEqual(cardNode.due, new Date(mockCards[0].due));
     });
     it('handles null date', () => {
       const cardNode = toCardNode({ ...mockCards[0], due: null }, () => {});
 
-      equal(cardNode.due, null);
+      strictEqual(cardNode.due, null);
     });
   });
 
@@ -120,14 +148,14 @@ describe('Graphql', () => {
     it('includes properties', () => {
       const checklistNode = toCheckListNode(checklist, createContentDigest);
 
-      equal(checklistNode.id, checklist.id);
-      equal(checklistNode.name, checklist.name);
+      strictEqual(checklistNode.id, checklist.id);
+      strictEqual(checklistNode.name, checklist.name);
     });
 
     it('is type TrelloChecklist', () => {
       const checklistNode = toCheckListNode(checklist, createContentDigest);
 
-      equal(checklistNode.internal.type, 'TrelloBoardChecklist');
+      strictEqual(checklistNode.internal.type, 'TrelloBoardChecklist');
     });
 
     it('uses fetched object as digest', () => {
@@ -135,8 +163,8 @@ describe('Graphql', () => {
 
       const checklistNode = toCheckListNode(checklist, createContentDigest);
 
-      deepEqual(createContentDigest.lastCall.firstArg, checklist);
-      equal(checklistNode.internal.contentDigest, 'hash12323');
+      deepStrictEqual(createContentDigest.lastCall.firstArg, checklist);
+      strictEqual(checklistNode.internal.contentDigest, 'hash12323');
     });
   });
 
@@ -144,22 +172,22 @@ describe('Graphql', () => {
     it('includes properties', () => {
       const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
-      equal(checklistItemNode.id, checkItem2.id);
-      equal(checklistItemNode.name, checkItem2.name);
+      strictEqual(checklistItemNode.id, checkItem2.id);
+      strictEqual(checklistItemNode.name, checkItem2.name);
     });
 
     it('is type TrelloBoardChecklistItem', () => {
       const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
-      equal(checklistItemNode.internal.type, 'TrelloBoardChecklistItem');
+      strictEqual(checklistItemNode.internal.type, 'TrelloBoardChecklistItem');
     });
 
     it('uses fetched object as digest', () => {
       createContentDigest.returns('test123');
       const checklistItemNode = toCheckListItemNode(checkItem2, createContentDigest);
 
-      deepEqual(createContentDigest.lastCall.firstArg, checkItem2);
-      equal(checklistItemNode.internal.contentDigest, 'test123');
+      deepStrictEqual(createContentDigest.lastCall.firstArg, checkItem2);
+      strictEqual(checklistItemNode.internal.contentDigest, 'test123');
     });
   });
 });

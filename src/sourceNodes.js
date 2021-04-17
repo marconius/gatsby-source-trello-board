@@ -54,9 +54,22 @@ async function sourceNodes(
   },
   configOptions,
 ) {
-  const data = await fetch.getTrelloCards(configOptions);
   // eslint-disable-next-line no-console
   console.log('Fetching from Trello...');
+  const {
+    board,
+    cardsWithAttachmentsAndChecklists: data,
+  } = await fetch.getTrelloCards(configOptions);
+
+  const boardNode = createNode({
+    ...board,
+    internal: {
+      type: 'TrelloBoard',
+      contentDigest: createContentDigest(board),
+      mediaType: 'text/markdown',
+    },
+  });
+
   let cardCount = 0;
   try {
     await Promise.all(
@@ -65,7 +78,10 @@ async function sourceNodes(
         const cardNode = toCardNode(card, createContentDigest);
         createNode(cardNode);
         cardCount += 1;
-
+        createParentChildLink({
+          parent: boardNode,
+          child: cardNode,
+        });
         // Create checklist nodes
         card.checklists.forEach((checklist) => {
           const checklistNode = toCheckListNode(checklist, createContentDigest);
